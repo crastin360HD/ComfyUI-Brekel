@@ -1,5 +1,6 @@
 #
 # Brekel Prompt Chooser Node for ComfyUI
+# Version: 1.0.0
 #
 # Author: Brekel - https://brekel.com
 #
