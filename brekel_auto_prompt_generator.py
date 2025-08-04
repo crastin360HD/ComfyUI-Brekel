@@ -119,7 +119,7 @@ class BrekelAutoPromptGenerator:
                 "random_line_file4": (txt_file_options, {"default": "details.txt", "tooltip": f"File to pick a random line from. File must be in the 'ComfyUI/custom_nodes/ComfyUI-Brekel/{SUBFOLDER_NAME}' subfolder. If 'None' is selected, no line will be picked from this file."}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFF, "step": 1, "forceInput": False, "control_after_generate": True}),
                 "mode": (["Random Prompt", "Static Prompt"], {"default": "Random Prompt", "tooltip": "Generate a random prompt or use the static"}),
-                "static_prompt": ("STRING", {"multiline": True, "default": "a majestic phoenix with fiery wings, in a mystical enchanted forest, highly detailed digital painting, volumetric lighting, god rays", "tooltip": "Static prompt to use when 'use_static_prompt' is set to 'true'. If empty, no static prompt will be used."}),
+                "static_prompt": ("STRING", {"multiline": True, "default": "", "tooltip": "Static prompt to use when 'use_static_prompt' is set to 'true'. If empty, no static prompt will be used."}),
                 "postfix": ("STRING", {"multiline": False, "default": "", "tooltip": "Postfix to append at the end of the prompt, for example to add your Lora trigger word(s)."}),
                 "delimiter": ("STRING", {"default": ", ", "tooltip": "Delimiter to use between items. Use '\\n' for a newline character."}),
                 "clean_whitespace": (["true", "false"], {"default": "true", "tooltip": "Remove leading and trailing whitespace from the final prompt"}),
