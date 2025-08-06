@@ -1,6 +1,6 @@
 #
 # Brekel Prompt Enhancer Node for ComfyUI
-# Version: 1.0.0
+# Version: 1.1.0
 #
 # Author: Brekel - https://brekel.com
 #
@@ -14,6 +14,20 @@
 # - Defaults to SDPA (Scaled Dot-Product Attention) for optimal memory and speed.
 # - Flexible memory management with performance reporting for offloading.
 # - Controllable creativity, seed, and target_length for prompt generation.
+#
+#
+# Release log:
+#
+# v1.1.0:
+# - added a fifth file selector
+# - node now shows the prompt it generated on the node itself after it has run
+# - cleaned up the length_instruction that get's added to the system prompt a bit
+
+
+# --- CONFIGURATION CONSTANT ---
+# Define the subfolder name where custom system prompt text files are stored.
+# This folder is expected to be inside the custom node's directory.
+SUBFOLDER_NAME = "prompt_enhancer"
 
 
 import os
@@ -24,10 +38,14 @@ import warnings
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 
-# --- CONFIGURATION CONSTANT ---
-# Define the subfolder name where custom system prompt text files are stored.
-# This folder is expected to be inside the custom node's directory.
-SUBFOLDER_NAME = "prompt_enhancer"
+# import block to communicate with the frontend
+try:
+    from server import PromptServer
+except ImportError:
+    # If the server is not available (e.g., in a headless environment)  create a dummy class to prevent errors.
+    class PromptServer:
+        instance = None
+
 
 # --- Setup basic logging ---
 # Configures a logger to output informational messages to the console.
@@ -163,7 +181,10 @@ class BrekelEnhancePrompt:
                 "creativity": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 2.0, "step": 0.1, "display": "slider", "tooltip": "Creativity level (temperature)."}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                 "postfix": ("STRING", {"multiline": False, "default": "", "tooltip": "Postfix to append at the end of the prompt, for example to add your Lora trigger word(s)."}),
-            }
+            },
+            "hidden": {
+                "unique_id": "UNIQUE_ID",
+            },
         }
 
     @classmethod
@@ -305,7 +326,7 @@ class BrekelEnhancePrompt:
         return cleaned_text
     
 
-    def brekel_enhance_prompt(self, prompt: str, prefix: str, model_name: str, quantization: str, memory_management: str, system_prompt: str, target_length: int, creativity: float, seed: int, postfix: str):
+    def brekel_enhance_prompt(self, prompt: str, prefix: str, model_name: str, quantization: str, memory_management: str, system_prompt: str, target_length: int, creativity: float, seed: int, postfix: str, unique_id=None):
         """
         The main execution function of the node. It orchestrates loading the model,
         generating the enhanced prompt, and handling memory management.
@@ -336,10 +357,7 @@ class BrekelEnhancePrompt:
             logger.info(f"Settings: model={model_name}, creativity={creativity}, target_length={target_length}, seed={'random' if seed == 0 else seed}")
             
             length_instruction = (
-                f"\n\nIMPORTANT: Expand the user's idea into a rich, detailed, and evocative prompt for a text-to-image model. "
-                f"Aim for a total length of approximately {target_length} characters. "
-                "Add creative details about lighting, style, composition, and mood. "
-                "Your response must be ONLY the enhanced prompt itself, without any conversational introduction."
+                f"\n\nIMPORTANT: Aim for a total length of approximately {target_length} characters. Your response must be ONLY the enhanced prompt itself, without any conversational introduction."
             )
             final_system_prompt = active_system_prompt + length_instruction
             logger.info(f"\nSystem prompt: '{final_system_prompt}'\n")
@@ -371,6 +389,11 @@ class BrekelEnhancePrompt:
             prompt_parts = [p.strip() for p in [prefix, enhanced_prompt, postfix] if p.strip()]
             final_prompt = ", ".join(prompt_parts)
 
+            # Send the prompt content to the UI
+            if unique_id and PromptServer.instance:
+                text_to_display = f"""<div style="margin-bottom: 4px; font-size: 0.8em; color: #888;">Prompt: {final_prompt}</div>"""
+                PromptServer.instance.send_progress_text(final_prompt, unique_id)
+
             logger.info(f"\n--- Final Combined Prompt ---\n{final_prompt}\n\n")
             return (final_prompt,)
 
@@ -398,6 +421,7 @@ class BrekelEnhancePrompt:
                     _loaded_model = _loaded_tokenizer = _loaded_model_name = _loaded_quantization = None
                     _model_is_offloaded = False
                     torch.cuda.empty_cache()
+
 
 # --- ComfyUI Node Registration ---
 NODE_CLASS_MAPPINGS = {"BrekelEnhancePrompt": BrekelEnhancePrompt}

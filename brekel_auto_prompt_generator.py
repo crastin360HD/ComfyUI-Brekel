@@ -1,6 +1,6 @@
 #
 # Brekel Auto Prompt Generator Node for ComfyUI
-# Version: 1.0.0
+# Version: 1.1.0
 #
 # Author: Brekel - https://brekel.com
 #
@@ -13,14 +13,30 @@
 # - Handles multiple text files with a seed for randomization. 
 # - Provides options for prefix, postfix, and delimiter customization.
 # - Cleans up whitespace if desired.
- 
- 
-import random
-import os
+#
+#
+# Release log:
+#
+# v1.1.0:
+# - node now shows the prompt it generated on the node itself after it has run
+#
+
 
 # --- CONFIGURATION CONSTANT ---
 # Define the subfolder name where text files are stored.
 SUBFOLDER_NAME = "auto_prompt_generator"
+
+
+import random
+import os
+
+# import block to communicate with the frontend
+try:
+    from server import PromptServer
+except ImportError:
+    # If the server is not available (e.g., in a headless environment)  create a dummy class to prevent errors.
+    class PromptServer:
+        instance = None
 
 
 # --- HELPER FUNCTIONS ---
@@ -118,6 +134,7 @@ class BrekelAutoPromptGenerator:
                 "random_line_file2": (txt_file_options, {"default": "locations.txt", "tooltip": f"File to pick a random line from. File must be in the 'ComfyUI/custom_nodes/ComfyUI-Brekel/{SUBFOLDER_NAME}' subfolder. If 'None' is selected, no line will be picked from this file."}),
                 "random_line_file3": (txt_file_options, {"default": "styles.txt", "tooltip": f"File to pick a random line from. File must be in the 'ComfyUI/custom_nodes/ComfyUI-Brekel/{SUBFOLDER_NAME}' subfolder. If 'None' is selected, no line will be picked from this file."}),
                 "random_line_file4": (txt_file_options, {"default": "details.txt", "tooltip": f"File to pick a random line from. File must be in the 'ComfyUI/custom_nodes/ComfyUI-Brekel/{SUBFOLDER_NAME}' subfolder. If 'None' is selected, no line will be picked from this file."}),
+                "random_line_file5": (txt_file_options, {"None": "details.txt", "tooltip": f"File to pick a random line from. File must be in the 'ComfyUI/custom_nodes/ComfyUI-Brekel/{SUBFOLDER_NAME}' subfolder. If 'None' is selected, no line will be picked from this file."}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFF, "step": 1, "forceInput": False, "control_after_generate": True}),
                 "mode": (["Random Prompt", "Static Prompt"], {"default": "Random Prompt", "tooltip": "Generate a random prompt or use the static"}),
                 "static_prompt": ("STRING", {"multiline": True, "default": "", "tooltip": "Static prompt to use when 'use_static_prompt' is set to 'true'. If empty, no static prompt will be used."}),
@@ -125,11 +142,12 @@ class BrekelAutoPromptGenerator:
                 "delimiter": ("STRING", {"default": ", ", "tooltip": "Delimiter to use between items. Use '\\n' for a newline character."}),
                 "clean_whitespace": (["true", "false"], {"default": "true", "tooltip": "Remove leading and trailing whitespace from the final prompt"}),
             },
-            "optional": {
-            }
+            "hidden": {
+                "unique_id": "UNIQUE_ID",
+            },
         }
 
-    def brekel_generate_prompt(self, prefix, mode, random_line_file1, random_line_file2, random_line_file3, random_line_file4, seed, static_prompt, postfix, delimiter, clean_whitespace):
+    def brekel_generate_prompt(self, prefix, mode, random_line_file1, random_line_file2, random_line_file3, random_line_file4, random_line_file5, seed, static_prompt, postfix, delimiter, clean_whitespace, unique_id=None):
         # Determine the effective delimiter (handle "\n" input as actual newline)
         effective_delimiter = delimiter
         if effective_delimiter == "\\n":
@@ -148,6 +166,7 @@ class BrekelAutoPromptGenerator:
             file_path2 = os.path.join(txt_files_dir, random_line_file2) if random_line_file2 != "None" else ""
             file_path3 = os.path.join(txt_files_dir, random_line_file3) if random_line_file3 != "None" else ""
             file_path4 = os.path.join(txt_files_dir, random_line_file4) if random_line_file4 != "None" else ""
+            file_path5 = os.path.join(txt_files_dir, random_line_file5) if random_line_file5 != "None" else ""
 
             random_phrases = []
 
@@ -156,6 +175,7 @@ class BrekelAutoPromptGenerator:
             if file_path2: random_phrases.append(pick_random_line_from_file(file_path2, seed))
             if file_path3: random_phrases.append(pick_random_line_from_file(file_path3, seed))
             if file_path4: random_phrases.append(pick_random_line_from_file(file_path4, seed))
+            if file_path5: random_phrases.append(pick_random_line_from_file(file_path5, seed))
 
             # Join non-empty random phrases with the effective delimiter
             core_content_derived = effective_delimiter.join(filter(None, random_phrases))
@@ -180,6 +200,11 @@ class BrekelAutoPromptGenerator:
 
         if clean_whitespace == "true":
             concatenated_string = concatenated_string.strip()
+
+        # Send the prompt content to the UI
+        if unique_id and PromptServer.instance:
+            text_to_display = f"""<div style="margin-bottom: 4px; font-size: 0.8em; color: #888;">Prompt: {concatenated_string}</div>"""
+            PromptServer.instance.send_progress_text(concatenated_string, unique_id)
 
         # Output must be a tuple, even for a single output
         return (concatenated_string,)

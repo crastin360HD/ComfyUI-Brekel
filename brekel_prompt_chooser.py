@@ -1,6 +1,6 @@
 #
 # Brekel Prompt Chooser Node for ComfyUI
-# Version: 1.0.0
+# Version: 1.1.0
 #
 # Author: Brekel - https://brekel.com
 #
@@ -9,16 +9,31 @@
 # Key Features:
 # - Choose a random prompt from a folder using a seed.
 # - Choose a specific prompt from a folder by its index.
+#
+#
+# Release log:
+#
+# v1.1.0:
+# - node now shows which file it has chosen after it has run
+#
+
+
+# --- CONFIGURATION CONSTANT ---
+# Define the subfolder name where text files are stored.
+SUBFOLDER_NAME = "prompt_chooser"
 
 
 import os
 import logging
 import random
 
-
-# --- CONFIGURATION CONSTANT ---
-# Define the subfolder name where text files are stored.
-SUBFOLDER_NAME = "prompt_chooser"
+# import block to communicate with the frontend
+try:
+    from server import PromptServer
+except ImportError:
+    # If the server is not available (e.g., in a headless environment)  create a dummy class to prevent errors.
+    class PromptServer:
+        instance = None
 
 
 # --- Setup basic logging ---
@@ -52,7 +67,10 @@ class BrekelPromptChooser:
                     "max": 4095, # A reasonably high number for the index
                     "tooltip": "The index of the file to choose when in 'Index' mode (sorted alphabetically, if index is higher than the number of files it wraps back around)."
                 }),
-            }
+            },
+            "hidden": {
+                "unique_id": "UNIQUE_ID",
+            },
         }
 
     # --- Node configuration for ComfyUI ---
@@ -61,7 +79,8 @@ class BrekelPromptChooser:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("prompt",)
 
-    def choose_prompt(self, folder_path: str, selection_mode: str, seed: int, file_index: int):
+    # --- Update the function signature to accept the new 'unique_id' argument ---
+    def choose_prompt(self, folder_path: str, selection_mode: str, seed: int, file_index: int, unique_id=None):
         """
         Main execution function. It selects a .txt file from the given folder,
         either randomly or by index, and returns its content.
@@ -88,21 +107,17 @@ class BrekelPromptChooser:
         
         # Logic to handle the different selection modes.
         if selection_mode == "Random":
-            # Seed the random number generator for deterministic results.
             random.seed(seed)
-            # Choose a random file from the list.
             chosen_file = random.choice(available_files)
             print(f"[Brekel Prompt Chooser] Random mode (seed {seed}) selected '{chosen_file}' from '{folder_path}'")
 
         elif selection_mode == "Index":
             num_files = len(available_files)
-            # Use modulo to wrap the index around if it's too high.
             actual_index = file_index % num_files
             chosen_file = available_files[actual_index]
             print(f"[Brekel Prompt Chooser] Index mode (input index {file_index} -> wrapped to {actual_index}) selected '{chosen_file}' from '{folder_path}'")
         
         else:
-            # Fallback in case of an unexpected mode.
             error_msg = f"Unknown selection mode: {selection_mode}"
             logger.error(f"[Brekel Prompt Chooser] {error_msg}")
             return (f"ERROR: {error_msg}",)
@@ -112,6 +127,12 @@ class BrekelPromptChooser:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
+
+            # Send the prompt content to the UI
+            if unique_id and PromptServer.instance:
+                text_to_display = f"""<div style="margin-bottom: 4px; font-size: 0.8em; color: #888;">Chosen file: {chosen_file}</div>"""
+                PromptServer.instance.send_progress_text(text_to_display, unique_id)
+
             return (content,)
         except Exception as e:
             error_msg = f"Failed to read file '{file_path}': {e}"
